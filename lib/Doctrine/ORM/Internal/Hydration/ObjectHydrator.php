@@ -224,6 +224,7 @@ class ObjectHydrator extends AbstractHydrator
             }
 
             $className = $this->_ce[$className]->discriminatorMap[$data[$discrColumn]];
+            $classMetaData = $this->_getClassMetadata($className);
 
             unset($data[$discrColumn]);
         }
