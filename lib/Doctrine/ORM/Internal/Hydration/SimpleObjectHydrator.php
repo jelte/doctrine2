@@ -85,18 +85,20 @@ class SimpleObjectHydrator extends AbstractHydrator
      */
     protected function hydrateRowData(array $sqlResult, array &$cache, array &$result)
     {
+        $classMetadata = $this->class;
         $entityName = $this->class->name;
         $data       = array();
 
         // We need to find the correct entity class name if we have inheritance in resultset
-        if ($this->class->inheritanceType !== ClassMetadata::INHERITANCE_TYPE_NONE) {
-            $discrColumnName = $this->_platform->getSQLResultCasing($this->class->discriminatorColumn['name']);
+        if ($classMetadata->inheritanceType !== ClassMetadata::INHERITANCE_TYPE_NONE) {
+            $discrColumnName = $this->_platform->getSQLResultCasing($classMetadata->discriminatorColumn['name']);
 
             if ($sqlResult[$discrColumnName] === '') {
                 throw HydrationException::emptyDiscriminatorValue(key($this->_rsm->aliasMap));
             }
 
-            $entityName = $this->class->discriminatorMap[$sqlResult[$discrColumnName]];
+            $entityName = $classMetadata->discriminatorMap[$sqlResult[$discrColumnName]];
+            $classMetadata = $this->_getClassMetadata($entityName);
 
             unset($sqlResult[$discrColumnName]);
         }
@@ -124,15 +126,15 @@ class SimpleObjectHydrator extends AbstractHydrator
         }
 
         if (isset($this->_hints[Query::HINT_REFRESH_ENTITY])) {
-            $this->registerManaged($this->class, $this->_hints[Query::HINT_REFRESH_ENTITY], $data);
+            $this->registerManaged($classMetadata, $this->_hints[Query::HINT_REFRESH_ENTITY], $data);
         }
 
         $uow    = $this->_em->getUnitOfWork();
         $entity = $uow->createEntity($entityName, $data, $this->_hints);
 
         //TODO: These should be invoked later, after hydration, because associations may not yet be loaded here.
-        if (isset($this->class->lifecycleCallbacks[Events::postLoad])) {
-            $this->class->invokeLifecycleCallbacks(Events::postLoad, $entity);
+        if (isset($classMetadata->lifecycleCallbacks[Events::postLoad])) {
+            $classMetadata->invokeLifecycleCallbacks(Events::postLoad, $entity);
         }
 
         $evm = $this->_em->getEventManager();
@@ -142,6 +144,23 @@ class SimpleObjectHydrator extends AbstractHydrator
         }
 
         $result[] = $entity;
+    }
+
+    /**
+     * Gets a ClassMetadata instance from the local cache.
+     * If the instance is not yet in the local cache, it is loaded into the
+     * local cache.
+     *
+     * @param string $className The name of the class.
+     * @return ClassMetadata
+     */
+    private function _getClassMetadata($className)
+    {
+        if ( ! isset($this->_ce[$className])) {
+            $this->_ce[$className] = $this->_em->getClassMetadata($className);
+        }
+
+        return $this->_ce[$className];
     }
 
     /**
