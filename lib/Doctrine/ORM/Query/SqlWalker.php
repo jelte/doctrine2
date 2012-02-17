@@ -462,6 +462,16 @@ class SqlWalker implements TreeWalker
         $sql = '';
 
         switch ($pathExpr->type) {
+           case 9:
+                $fieldName = $pathExpr->field;
+                $dqlAlias = $pathExpr->identificationVariable;
+                foreach ( $pathExpr->class as $i => $subclass ) {
+                    if ($this->_useSqlTableAliases) {
+                        $sql .= $this->walkIdentificationVariable($dqlAlias, $fieldName) . '.';
+                    }
+                    $sql .= $subclass->getQuotedColumnName($fieldName, $this->_platform);
+                }
+                break;
             case AST\PathExpression::TYPE_STATE_FIELD:
                 $fieldName = $pathExpr->field;
                 $dqlAlias = $pathExpr->identificationVariable;

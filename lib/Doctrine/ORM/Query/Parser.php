@@ -637,6 +637,26 @@ class Parser
             }
         }
     }
+    
+    /* SEARCH ON PROPERTIES OF SUBCLASSES */
+    private function isPropertyOfSubclass($field, $class)
+    {
+        $value = false;
+        foreach ( $class->subClasses as $subClassName ) {
+            $subClass = $this->_em->getClassMetadata($subClassName);
+            if ( isset($subClass->associationMappings[$field]) ) {
+                $value = $subClass->associationMappings[$field];
+            }
+            if ( isset($subClass->fieldMappings[$field]) ) {
+                $value = $subClass->fieldMappings[$field];                
+            }
+            if ( $value ) {
+                $value['class'][] = $subClass;
+                return $value;
+            }
+        }
+        return $value;
+    }
 
     /**
      * Validates that the given <tt>PathExpression</tt> is semantically correct for grammar rules:
@@ -662,25 +682,29 @@ class Parser
                 $field = $pathExpression->field = $class->identifier[0];
             }
             
+            /* SEARCH ON PROPERTIES OF SUBCLASSES */
+            $propertyOfSubclass = $this->isPropertyOfSubclass($field, $class);
             // Check if field or association exists
-            if ( ! isset($class->associationMappings[$field]) && ! isset($class->fieldMappings[$field])) {
+            if ( ! isset($class->associationMappings[$field]) && ! isset($class->fieldMappings[$field]) && !$propertyOfSubclass ) {
                 $this->semanticalError(
                     'Class ' . $class->name . ' has no field or association named ' . $field,
                     $deferredItem['token']
                 );
             }
 
-            if (isset($class->fieldMappings[$field])) {
-                $fieldType = AST\PathExpression::TYPE_STATE_FIELD;
-            } else {
-                $assoc = $class->associationMappings[$field];
-                $class = $this->_em->getClassMetadata($assoc['targetEntity']);
+            $fieldType = AST\PathExpression::TYPE_STATE_FIELD;
 
-                if ($assoc['type'] & ClassMetadata::TO_ONE) {
-                    $fieldType = AST\PathExpression::TYPE_SINGLE_VALUED_ASSOCIATION;
-                } else {
-                    $fieldType = AST\PathExpression::TYPE_COLLECTION_VALUED_ASSOCIATION;
-                }
+            if ( $propertyOfSubclass ) {
+                $fieldType = 9;
+                $pathExpression->class = $propertyOfSubclass['class'];
+            }
+
+            if (isset($class->associationMappings[$field])) {
+                $assoc = $class->associationMappings[$field];
+
+                $fieldType = ($assoc['type'] & ClassMetadata::TO_ONE)
+                    ? AST\PathExpression::TYPE_SINGLE_VALUED_ASSOCIATION
+                    : AST\PathExpression::TYPE_COLLECTION_VALUED_ASSOCIATION;
             }
 
             // Validate if PathExpression is one of the expected types
