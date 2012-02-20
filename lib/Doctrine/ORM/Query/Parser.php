@@ -684,6 +684,7 @@ class Parser
             
             /* SEARCH ON PROPERTIES OF SUBCLASSES */
             $propertyOfSubclass = $this->isPropertyOfSubclass($field, $class);
+
             // Check if field or association exists
             if ( ! isset($class->associationMappings[$field]) && ! isset($class->fieldMappings[$field]) && !$propertyOfSubclass ) {
                 $this->semanticalError(

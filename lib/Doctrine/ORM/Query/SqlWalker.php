@@ -447,8 +447,34 @@ class SqlWalker implements TreeWalker
         ) {
             $class = $this->_em->getClassMetadata($class->fieldMappings[$fieldName]['inherited']);
         }
+        if ( !isset($class->fieldMappings[$fieldName])) {
+            $class = $this->isPropertyOfSubclass($fieldName, $class);
+            if ( is_array($class) ) {
+                $properties = array();
+                foreach ( $class as $subclass ) {
+                    $properties[] = $this->getSQLTableAlias($subclass->table['name'], $identificationVariable);
+                }
+                throw new MultipleSubclassException($properties);
+            }
+        }
 
         return $this->getSQLTableAlias($class->table['name'], $identificationVariable);
+    }
+    
+    /* SEARCH ON PROPERTIES OF SUBCLASSES */
+    private function isPropertyOfSubclass($field, $class)
+    {
+        $value = false;
+        foreach ( $class->subClasses as $subClassName ) {
+            $subClass = $this->_em->getClassMetadata($subClassName);
+            if ( isset($subClass->associationMappings[$field]) ) {
+                $classes[] = $subClass;
+            }
+            if ( isset($subClass->fieldMappings[$field]) ) {
+                $classes[] = $subClass;
+            }
+        }
+        return count($classes) == 1 ? array_shift($classes) : $classes;
     }
 
     /**
@@ -466,10 +492,19 @@ class SqlWalker implements TreeWalker
                 $fieldName = $pathExpr->field;
                 $dqlAlias = $pathExpr->identificationVariable;
                 foreach ( $pathExpr->class as $i => $subclass ) {
-                    if ($this->_useSqlTableAliases) {
-                        $sql .= $this->walkIdentificationVariable($dqlAlias, $fieldName) . '.';
+                    $columnName = $subclass->getQuotedColumnName($fieldName, $this->_platform);
+                    try {
+                        if ($this->_useSqlTableAliases) {
+                            $sql .= $this->walkIdentificationVariable($dqlAlias, $fieldName) . '.';
+                        }
+                        $sql .= $columnName;
+                    } catch ( MultipleSubclassException $e) {
+                        $properties = array();
+                        foreach ( $e->getProperties() as $property ) {
+                            $properties[] = $property.'.'.$columnName;
+                        }
+                        throw new MultipleSubclassException($properties);
                     }
-                    $sql .= $subclass->getQuotedColumnName($fieldName, $this->_platform);
                 }
                 break;
             case AST\PathExpression::TYPE_STATE_FIELD:
@@ -1829,21 +1864,34 @@ class SqlWalker implements TreeWalker
      */
     public function walkLikeExpression($likeExpr)
     {
-        $stringExpr = $likeExpr->stringExpression;
-        $sql = $stringExpr->dispatch($this) . ($likeExpr->not ? ' NOT' : '') . ' LIKE ';
+        
+        $like = ($likeExpr->not ? ' NOT' : '') . ' LIKE ';
 
         if ($likeExpr->stringPattern instanceof AST\InputParameter) {
             $inputParam = $likeExpr->stringPattern;
             $dqlParamKey = $inputParam->name;
             $this->_parserResult->addParameterMapping($dqlParamKey, $this->_sqlParamIndex++);
-            $sql .= '?';
+            $like .= '?';
         } else {
-            $sql .= $this->_conn->quote($likeExpr->stringPattern);
+            $like .= $this->_conn->quote($likeExpr->stringPattern);
         }
 
         if ($likeExpr->escapeChar) {
-            $sql .= ' ESCAPE ' . $this->_conn->quote($likeExpr->escapeChar);
+            $like .= ' ESCAPE ' . $this->_conn->quote($likeExpr->escapeChar);
         }
+        
+        try {
+            $stringExpr = $likeExpr->stringExpression;
+            $field = $stringExpr->dispatch($this);
+            $sql = $field.$like;
+        } catch ( MultipleSubclassException $e ) {
+            $parts = array();
+            foreach ( $e->getProperties() as $property ) {
+                $parts[] = $property.$like;
+            }
+            $sql = '('.implode(' OR ',$parts).')';
+        }
+        
 
         return $sql;
     }
