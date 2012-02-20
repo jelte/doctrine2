@@ -637,7 +637,7 @@ class Parser
             }
         }
     }
-    
+
     /* SEARCH ON PROPERTIES OF SUBCLASSES */
     private function isPropertyOfSubclass($field, $class)
     {
