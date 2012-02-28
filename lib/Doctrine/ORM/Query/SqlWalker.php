@@ -1738,15 +1738,29 @@ class SqlWalker implements TreeWalker
      */
     public function walkInExpression($inExpr)
     {
-        $sql = $this->walkPathExpression($inExpr->pathExpression) 
-             . ($inExpr->not ? ' NOT' : '') . ' IN (';
+        try {
+            $sql = $this->walkPathExpression($inExpr->pathExpression) 
+                . ($inExpr->not ? ' NOT' : '') . ' IN (';
 
-        $sql .= ($inExpr->subselect) 
-            ? $this->walkSubselect($inExpr->subselect)
-            : implode(', ', array_map(array($this, 'walkInParameter'), $inExpr->literals));
+            $sql .= ($inExpr->subselect) 
+                ? $this->walkSubselect($inExpr->subselect)
+                : implode(', ', array_map(array($this, 'walkInParameter'), $inExpr->literals));
 
-        $sql .= ')';
-
+            $sql .= ')';
+        } catch ( MultipleSubclassException $e ) {
+            $parts = array();
+            foreach ( $e->getProperties() as $property ) {
+                $parts[] = $property
+                . ($inExpr->not ? ' NOT' : '') . ' IN ('
+                . (
+                    $inExpr->subselect 
+                    ? $this->walkSubselect($inExpr->subselect)
+                    : implode(', ', array_map(array($this, 'walkInParameter'), $inExpr->literals))
+                )
+                . ')';
+            }
+            $sql = '('.implode(' OR ',$parts).')';
+        }
         return $sql;
     }
 
@@ -1888,10 +1902,14 @@ class SqlWalker implements TreeWalker
             $parts = array();
             foreach ( $e->getProperties() as $property ) {
                 $parts[] = $property.$like;
+                if ($likeExpr->stringPattern instanceof AST\InputParameter && count($parts) > 1) {
+                    $inputParam = $likeExpr->stringPattern;
+                    $dqlParamKey = $inputParam->name;
+                    $this->_parserResult->addParameterMapping($dqlParamKey, $this->_sqlParamIndex++);
+                }
             }
             $sql = '('.implode(' OR ',$parts).')';
         }
-        
 
         return $sql;
     }
