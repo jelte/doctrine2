@@ -1370,7 +1370,13 @@ class SqlWalker implements TreeWalker
         
         foreach ($groupByClause->groupByItems AS $groupByItem) {
             if ( ! is_string($groupByItem)) {
-                $sqlParts[] = $this->walkGroupByItem($groupByItem);
+                try {
+                    $sqlParts[] = $this->walkGroupByItem($groupByItem);
+                } catch (MultipleSubclassException $e) {
+                    foreach ( $e->getProperties() as $property ) {
+                        $sqlParts[] = $property;
+                    }
+                }
                 
                 continue;
             }
