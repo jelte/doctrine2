@@ -64,4 +64,14 @@ class Join
              . ($this->_condition ? ' ' . strtoupper($this->_conditionType) . ' ' . $this->_condition : '')
              . ($this->_indexBy ? ' INDEX BY ' . $this->_indexBy : '');
     }
+    
+    public function getAlias()
+    {
+        return $this->_alias;
+    }
+    
+    public function getJoin()
+    {
+        return $this->_join;
+    }
 }
