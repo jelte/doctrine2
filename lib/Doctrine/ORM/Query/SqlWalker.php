@@ -986,7 +986,7 @@ class SqlWalker implements TreeWalker
         $expr = $selectExpression->expression;
 
         if ($expr instanceof AST\PathExpression) {
-            if ($expr->type == AST\PathExpression::TYPE_STATE_FIELD) {
+            if ($expr->type == AST\PathExpression::TYPE_STATE_FIELD || $expr->type == 9) {
                 $fieldName = $expr->field;
                 $dqlAlias = $expr->identificationVariable;
                 $qComp = $this->_queryComponents[$dqlAlias];
@@ -1012,6 +1012,7 @@ class SqlWalker implements TreeWalker
                 $columnAlias = $this->_platform->getSQLResultCasing($columnAlias);
                 $this->_rsm->addScalarResult($columnAlias, $resultAlias);
             } else {
+                
                 throw QueryException::invalidPathExpression($expr->type);
             }
         }
